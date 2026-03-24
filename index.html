@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CorporaPR.ai — Comunicaciones Corporativas con IA</title>
+  <meta name="description" content="Genera press releases, citas ejecutivas y estrategias de PR profesionales en segundos con inteligencia artificial." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a26;
+      --border: #2a2a3e;
+      --accent: #6c63ff;
+      --accent2: #a78bfa;
+      --accent-glow: rgba(108, 99, 255, 0.25);
+      --text: #f0f0ff;
+      --text-muted: #8b8ba7;
+      --success: #22c55e;
+      --error: #ef4444;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    #root { min-height: 100vh; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px var(--accent-glow); }
+      50%       { box-shadow: 0 0 40px rgba(108,99,255,0.4); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes shimmer {
+      0%   { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    .fade-up { animation: fadeUp 0.4s ease both; }
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useCallback, useRef, useEffect } = React;
+
+/* ── AI proxy call ── */
+async function askAI(prompt) {
+  const res = await fetch("/.netlify/functions/ai-proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1800,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content?.[0]?.text ?? "";
+}
+
+/* ── Prompts ── */
+const CONTENT_TYPES = [
+  { id: "press_release",  label: "Press Release",      icon: "📰", desc: "Comunicado oficial para medios" },
+  { id: "exec_quote",     label: "Cita Ejecutiva",      icon: "💬", desc: "Quote del CEO / directivo clave" },
+  { id: "social_media",   label: "Redes Sociales",      icon: "📱", desc: "Posts para LinkedIn, X y más" },
+  { id: "media_pitch",    label: "Media Pitch",         icon: "🎯", desc: "Email de presentación a periodistas" },
+  { id: "crisis_pr",      label: "Gestión de Crisis",   icon: "🛡️", desc: "Comunicado ante situación crítica" },
+  { id: "analysis",       label: "Análisis de Industria", icon: "📊", desc: "Posicionamiento competitivo" },
+];
+
+function buildPrompt(type, data) {
+  const base = `Empresa: ${data.company}
+Industria: ${data.industry}
+Tono: ${data.tone}
+Detalles del anuncio: ${data.details}
+${data.audience ? `Audiencia objetivo: ${data.audience}` : ""}`;
+
+  const prompts = {
+    press_release: `Eres un experto en comunicaciones corporativas. Escribe un press release profesional y persuasivo en español (o inglés si el contexto lo requiere) con el siguiente formato estricto:
+[TITULAR] — impactante, máx 12 palabras
+[SUBTÍTULO] — contexto adicional, máx 20 palabras
+[CIUDAD, FECHA] — formato: Madrid, 24 de marzo de 2025 —
+[PÁRRAFO 1 — Lead] quién, qué, cuándo, dónde, por qué (2-3 frases)
+[PÁRRAFO 2 — Contexto] antecedentes y relevancia
+[PÁRRAFO 3 — Cita ejecutiva] cita atribuida al CEO o portavoz clave
+[PÁRRAFO 4 — Detalles] información adicional, cifras, datos
+[PÁRRAFO 5 — Boilerplate] descripción breve de la empresa
+[CONTACTO DE PRENSA] — nombre ficticio, email, teléfono
+
+Datos:\n${base}`,
+
+    exec_quote: `Eres speechwriter de Fortune 500. Genera 3 citas ejecutivas distintas (atribuibles al CEO) en tono ${data.tone}. Cada cita debe:
+- Tener entre 2 y 4 oraciones
+- Incluir una idea memorable o metáfora
+- Sonar auténtica, no corporativa vacía
+- Estar lista para publicación en medios
+
+Formato: [CITA 1], [CITA 2], [CITA 3] con título y atribución sugerida.
+
+Datos:\n${base}`,
+
+    social_media: `Eres social media manager especializado en B2B. Crea el siguiente pack de contenido:
+- 1 post de LinkedIn (300-400 palabras, hook fuerte, emojis moderados, CTA)
+- 2 posts de X/Twitter (máx 280 chars cada uno, con hashtags relevantes)
+- 1 headline para newsletter corporativa (máx 60 chars)
+
+Cada pieza debe tener voz consistente y generar engagement.
+
+Datos:\n${base}`,
+
+    media_pitch: `Eres PR strategist con experiencia en medios tecnológicos y de negocios. Escribe un email de media pitch con:
+- Asunto del email: magnético, máx 8 palabras
+- Primer párrafo: por qué esto le importa AL periodista específicamente
+- Segundo párrafo: el ángulo de la historia y datos clave
+- Tercer párrafo: oferta concreta (entrevista, exclusiva, datos)
+- Cierre: CTA claro y firma profesional
+
+Tono: directo, sin relleno, respeta el tiempo del periodista.
+
+Datos:\n${base}`,
+
+    crisis_pr: `Eres experto en crisis communications. Redacta una respuesta corporativa de crisis que:
+- Reconozca la situación sin admitir culpa innecesariamente
+- Demuestre empatía y responsabilidad
+- Anuncie acciones concretas y pasos a seguir
+- Cierre con compromiso hacia stakeholders
+- Sea adecuada para publicación inmediata en web y medios
+
+Incluye: comunicado principal + 3 key messages para portavoz.
+
+Datos:\n${base}`,
+
+    analysis: `Eres analista estratégico de una firma de consultoría top-tier. Proporciona un análisis de posicionamiento para relaciones públicas que incluya:
+1. Análisis del panorama competitivo (3-4 competidores clave y su narrativa PR)
+2. Oportunidades de diferenciación comunicacional
+3. Riesgos reputacionales a gestionar
+4. 3 ángulos editoriales únicos para medios
+5. KPIs de PR recomendados para medir impacto
+
+Sé específico, usa frameworks (SWOT, Porter si aplica), evita generalidades.
+
+Datos:\n${base}`,
+  };
+  return prompts[type];
+}
+
+/* ── Components ── */
+function Logo() {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+      <div style={{
+        width:36, height:36, borderRadius:10,
+        background:"linear-gradient(135deg,#6c63ff,#a78bfa)",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize:18, boxShadow:"0 0 20px rgba(108,99,255,0.4)"
+      }}>✦</div>
+      <span style={{ fontWeight:700, fontSize:18, letterSpacing:"-0.3px" }}>
+        Corpora<span style={{ color:"var(--accent2)" }}>PR</span>.ai
+      </span>
+    </div>
+  );
+}
+
+function Badge({ children }) {
+  return (
+    <span style={{
+      background:"linear-gradient(90deg,rgba(108,99,255,0.15),rgba(167,139,250,0.15))",
+      border:"1px solid rgba(108,99,255,0.3)",
+      borderRadius:999, padding:"3px 10px",
+      fontSize:11, fontWeight:600, color:"var(--accent2)",
+      letterSpacing:"0.5px", textTransform:"uppercase"
+    }}>{children}</span>
+  );
+}
+
+function InputField({ label, value, onChange, placeholder, multiline, rows=4, required }) {
+  const style = {
+    width:"100%", padding:"10px 14px",
+    background:"var(--surface2)", border:"1px solid var(--border)",
+    borderRadius:8, color:"var(--text)", fontSize:14,
+    fontFamily:"inherit", outline:"none", resize: multiline ? "vertical" : "none",
+    transition:"border-color 0.2s",
+  };
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+      <label style={{ fontSize:13, fontWeight:500, color:"var(--text-muted)" }}>
+        {label}{required && <span style={{ color:"var(--accent2)" }}> *</span>}
+      </label>
+      {multiline
+        ? <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows} style={style}
+            onFocus={e => e.target.style.borderColor="var(--accent)"}
+            onBlur={e => e.target.style.borderColor="var(--border)"} />
+        : <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={style}
+            onFocus={e => e.target.style.borderColor="var(--accent)"}
+            onBlur={e => e.target.style.borderColor="var(--border)"} />
+      }
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+      <label style={{ fontSize:13, fontWeight:500, color:"var(--text-muted)" }}>{label}</label>
+      <select value={value} onChange={e => onChange(e.target.value)} style={{
+        padding:"10px 14px", background:"var(--surface2)", border:"1px solid var(--border)",
+        borderRadius:8, color:"var(--text)", fontSize:14, fontFamily:"inherit", outline:"none",
+        cursor:"pointer"
+      }}>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function TypeCard({ type, selected, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      padding:"14px 16px", borderRadius:10, cursor:"pointer",
+      border:`1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+      background: selected ? "rgba(108,99,255,0.15)" : "var(--surface2)",
+      textAlign:"left", transition:"all 0.2s",
+      boxShadow: selected ? "0 0 16px rgba(108,99,255,0.2)" : "none",
+    }}>
+      <div style={{ fontSize:22, marginBottom:4 }}>{type.icon}</div>
+      <div style={{ fontSize:13, fontWeight:600, color: selected ? "var(--accent2)" : "var(--text)" }}>{type.label}</div>
+      <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>{type.desc}</div>
+    </button>
+  );
+}
+
+function ResultBox({ text, onCopy, copied }) {
+  return (
+    <div style={{
+      background:"var(--surface2)", border:"1px solid var(--border)",
+      borderRadius:10, overflow:"hidden"
+    }}>
+      <div style={{
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        padding:"10px 16px", borderBottom:"1px solid var(--border)",
+        background:"var(--surface)"
+      }}>
+        <span style={{ fontSize:12, color:"var(--text-muted)", fontWeight:500 }}>Resultado generado</span>
+        <button onClick={onCopy} style={{
+          padding:"4px 12px", borderRadius:6, border:"1px solid var(--border)",
+          background: copied ? "rgba(34,197,94,0.15)" : "var(--surface2)",
+          color: copied ? "var(--success)" : "var(--text-muted)",
+          fontSize:12, cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s"
+        }}>
+          {copied ? "✓ Copiado" : "Copiar"}
+        </button>
+      </div>
+      <pre style={{
+        padding:20, margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word",
+        fontSize:13, lineHeight:1.7, color:"var(--text)", fontFamily:"inherit",
+        maxHeight:520, overflowY:"auto"
+      }}>{text}</pre>
+    </div>
+  );
+}
+
+/* ── Main App ── */
+function App() {
+  const [form, setForm] = useState({
+    company: "", industry: "", details: "", audience: "", tone: "profesional"
+  });
+  const [contentType, setContentType] = useState("press_release");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const resultRef = useRef(null);
+
+  const set = key => val => setForm(f => ({ ...f, [key]: val }));
+
+  const isValid = form.company.trim() && form.industry.trim() && form.details.trim();
+
+  const generate = useCallback(async () => {
+    if (!isValid || loading) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const prompt = buildPrompt(contentType, form);
+      const text = await askAI(prompt);
+      setResult(text);
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior:"smooth", block:"start" }), 100);
+    } catch (e) {
+      setError(e.message || "Error inesperado. Por favor intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  }, [form, contentType, loading, isValid]);
+
+  const copy = () => {
+    if (!result) return;
+    navigator.clipboard.writeText(result).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column" }}>
+      {/* Header */}
+      <header style={{
+        padding:"16px 24px", borderBottom:"1px solid var(--border)",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        background:"rgba(10,10,15,0.9)", backdropFilter:"blur(12px)",
+        position:"sticky", top:0, zIndex:100
+      }}>
+        <Logo />
+        <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+          <Badge>Beta</Badge>
+          <span style={{ fontSize:12, color:"var(--text-muted)" }}>Powered by Claude AI</span>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section style={{
+        padding:"60px 24px 48px",
+        background:"radial-gradient(ellipse 80% 60% at 50% 0%, rgba(108,99,255,0.12) 0%, transparent 70%)",
+        textAlign:"center"
+      }} className="fade-up">
+        <Badge>Comunicaciones Corporativas con IA</Badge>
+        <h1 style={{
+          fontSize:"clamp(28px,5vw,48px)", fontWeight:800,
+          margin:"16px 0 12px", lineHeight:1.2,
+          background:"linear-gradient(135deg,#f0f0ff 30%,#a78bfa 100%)",
+          WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
+          letterSpacing:"-1px"
+        }}>
+          PR profesional,<br />generado en segundos.
+        </h1>
+        <p style={{ color:"var(--text-muted)", fontSize:16, maxWidth:520, margin:"0 auto" }}>
+          Crea press releases, pitches y estrategias de comunicación de nivel Fortune 500 con inteligencia artificial.
+        </p>
+      </section>
+
+      {/* Main */}
+      <main style={{ flex:1, maxWidth:900, width:"100%", margin:"0 auto", padding:"0 24px 60px" }}>
+
+        {/* Content type selector */}
+        <section style={{ marginBottom:36 }} className="fade-up">
+          <h2 style={{ fontSize:14, fontWeight:600, color:"var(--text-muted)", marginBottom:14, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+            ¿Qué necesitas generar?
+          </h2>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:10 }}>
+            {CONTENT_TYPES.map(t => (
+              <TypeCard key={t.id} type={t} selected={contentType===t.id} onClick={() => setContentType(t.id)} />
+            ))}
+          </div>
+        </section>
+
+        {/* Form */}
+        <section style={{
+          background:"var(--surface)", border:"1px solid var(--border)",
+          borderRadius:16, padding:28, marginBottom:24
+        }} className="fade-up">
+          <h2 style={{ fontSize:14, fontWeight:600, color:"var(--text-muted)", marginBottom:20, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+            Información de la empresa
+          </h2>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            <InputField label="Nombre de la empresa" value={form.company} onChange={set("company")}
+              placeholder="Ej: Acme Technologies" required />
+            <InputField label="Industria / Sector" value={form.industry} onChange={set("industry")}
+              placeholder="Ej: SaaS, Fintech, Salud Digital" required />
+            <SelectField label="Tono de comunicación" value={form.tone} onChange={set("tone")} options={[
+              { value:"profesional", label:"Profesional y formal" },
+              { value:"cercano",     label:"Cercano y humano" },
+              { value:"innovador",   label:"Innovador y disruptivo" },
+              { value:"técnico",     label:"Técnico y preciso" },
+              { value:"urgente",     label:"Urgente (crisis)" },
+            ]} />
+            <InputField label="Audiencia objetivo" value={form.audience} onChange={set("audience")}
+              placeholder="Ej: Inversores, medios tech, consumidores B2B" />
+            <div style={{ gridColumn:"1/-1" }}>
+              <InputField label="Detalles del anuncio o situación" value={form.details} onChange={set("details")}
+                placeholder="Describe el hecho relevante, datos clave, métricas, contexto... Cuanta más info, mejor resultado."
+                multiline rows={5} required />
+            </div>
+          </div>
+
+          <div style={{ marginTop:20, display:"flex", alignItems:"center", gap:14 }}>
+            <button
+              onClick={generate}
+              disabled={!isValid || loading}
+              style={{
+                padding:"12px 28px", borderRadius:8, border:"none",
+                background: isValid && !loading
+                  ? "linear-gradient(135deg,#6c63ff,#a78bfa)"
+                  : "var(--border)",
+                color: isValid && !loading ? "#fff" : "var(--text-muted)",
+                fontSize:14, fontWeight:600, cursor: isValid && !loading ? "pointer" : "not-allowed",
+                display:"flex", alignItems:"center", gap:8,
+                animation: isValid && !loading ? "pulse-glow 3s ease-in-out infinite" : "none",
+                transition:"all 0.2s"
+              }}
+            >
+              {loading ? <><div className="spinner" /> Generando...</> : <>✦ Generar {CONTENT_TYPES.find(t=>t.id===contentType)?.label}</>}
+            </button>
+            {!isValid && (
+              <span style={{ fontSize:12, color:"var(--text-muted)" }}>
+                Completa los campos marcados con *
+              </span>
+            )}
+          </div>
+        </section>
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            padding:"14px 16px", borderRadius:10, marginBottom:20,
+            background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)",
+            color:"#fca5a5", fontSize:13
+          }} className="fade-up">
+            ⚠ {error}
+          </div>
+        )}
+
+        {/* Result */}
+        {result && (
+          <div ref={resultRef} className="fade-up">
+            <ResultBox text={result} onCopy={copy} copied={copied} />
+            <p style={{ fontSize:12, color:"var(--text-muted)", marginTop:10, textAlign:"right" }}>
+              Revisa y personaliza el contenido antes de publicarlo.
+            </p>
+          </div>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer style={{
+        borderTop:"1px solid var(--border)", padding:"20px 24px",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        flexWrap:"wrap", gap:8
+      }}>
+        <Logo />
+        <span style={{ fontSize:12, color:"var(--text-muted)" }}>
+          © 2025 CorporaPR.ai — Todos los derechos reservados
+        </span>
+      </footer>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
