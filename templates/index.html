@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR PYME Domain Checker</title>
+  <style>
+    body { font-family: monospace; background: #0f0f0f; color: #e0e0e0; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    h1 { color: #4ade80; }
+    button { background: #4ade80; color: #000; border: none; padding: 10px 24px; font-size: 1rem; cursor: pointer; border-radius: 4px; }
+    button:disabled { background: #555; color: #999; cursor: not-allowed; }
+    #log { background: #1a1a1a; padding: 16px; border-radius: 6px; height: 200px; overflow-y: auto; font-size: 0.85rem; margin: 16px 0; }
+    #results { background: #1a1a1a; padding: 16px; border-radius: 6px; max-height: 300px; overflow-y: auto; }
+    .hit { color: #4ade80; }
+    .status-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; margin-left: 10px; }
+    .idle { background: #333; }
+    .running { background: #854d0e; color: #fde68a; }
+  </style>
+</head>
+<body>
+  <h1>PR PYME Domain Checker</h1>
+  <p>Bulk-checks domain availability via GoDaddy API across PR PYME niches.</p>
+  <p>Status: <span id="badge" class="status-badge idle">idle</span></p>
+  <button id="btn" onclick="startJob()">Run Checker</button>
+  <div id="log"></div>
+  <div id="results"><em>Results will appear here...</em></div>
+
+  <script>
+    let poll;
+
+    async function startJob() {
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      await fetch('/start', { method: 'POST' });
+      poll = setInterval(fetchStatus, 2000);
+    }
+
+    async function fetchStatus() {
+      const res = await fetch('/status');
+      const data = await res.json();
+
+      const badge = document.getElementById('badge');
+      badge.textContent = data.running ? 'running' : 'idle';
+      badge.className = 'status-badge ' + (data.running ? 'running' : 'idle');
+
+      const log = document.getElementById('log');
+      log.innerHTML = data.log.map(l => `<div>${l}</div>`).join('');
+      log.scrollTop = log.scrollHeight;
+
+      const results = document.getElementById('results');
+      if (data.results.length > 0) {
+        results.innerHTML = data.results.map(d => `<div class="hit">${d}</div>`).join('');
+      }
+
+      if (!data.running) {
+        clearInterval(poll);
+        document.getElementById('btn').disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

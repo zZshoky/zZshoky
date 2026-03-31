@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: pyme-domain-checker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: GODADDY_API_KEY
+        sync: false
+      - key: GODADDY_SECRET
+        sync: false
