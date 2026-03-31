@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0F4C75;
+  --color-primary-light: #3282B8;
+  --color-primary-dark: #0B3D5B;
+  --color-accent: #00B4D8;
+  --color-accent-light: #48CAE4;
+  --color-success: #06D6A0;
+  --color-warning: #FFD166;
+  --color-danger: #EF476F;
+  --color-surface: #F8FAFC;
+  --color-surface-dark: #E2E8F0;
+  --color-text: #1E293B;
+  --color-text-light: #64748B;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Calendar day styles */
+.calendar-day {
+  transition: all 0.15s ease;
+}
+.calendar-day:hover {
+  transform: scale(1.1);
+}
+.day-present {
+  background: var(--color-success);
+  color: white;
+  border-radius: 9999px;
+}
+.day-absent {
+  background: var(--color-surface-dark);
+  border-radius: 9999px;
+}
+.day-today {
+  ring: 2px solid var(--color-accent);
+}
+
+/* Compliance score ring animation */
+@keyframes score-fill {
+  from { stroke-dashoffset: 283; }
+}
+.score-ring {
+  animation: score-fill 1.5s ease-out forwards;
+}
+
+/* Gradient backgrounds */
+.hero-gradient {
+  background: linear-gradient(135deg, #0F4C75 0%, #3282B8 50%, #00B4D8 100%);
+}
+.card-shine {
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+}
