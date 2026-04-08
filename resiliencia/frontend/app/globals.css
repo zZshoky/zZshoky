@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet icon fix for Next.js */
+.leaflet-default-icon-path { display: none; }
